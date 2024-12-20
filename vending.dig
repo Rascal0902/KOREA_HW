@@ -1,0 +1,717 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>runRealTime</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Clock In</string>
+        </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>2147483647</int>
+        </entry>
+      </elementAttributes>
+      <pos x="600" y="480"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Reset</string>
+        </entry>
+      </elementAttributes>
+      <pos x="920" y="420"/>
+    </visualElement>
+    <visualElement>
+      <elementName>LED</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Coffee Out</string>
+        </entry>
+      </elementAttributes>
+      <pos x="1280" y="520"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Seven-Seg-Hex</elementName>
+      <elementAttributes>
+        <entry>
+          <string>segSize</string>
+          <int>1</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1500" y="440"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Ground</elementName>
+      <elementAttributes/>
+      <pos x="1560" y="820"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Seven-Seg-Hex</elementName>
+      <elementAttributes>
+        <entry>
+          <string>segSize</string>
+          <int>1</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1440" y="440"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Seven-Seg-Hex</elementName>
+      <elementAttributes>
+        <entry>
+          <string>segSize</string>
+          <int>1</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1440" y="640"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>100 won</string>
+        </entry>
+      </elementAttributes>
+      <pos x="600" y="620"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>500 won</string>
+        </entry>
+      </elementAttributes>
+      <pos x="600" y="700"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>1000 won</string>
+        </entry>
+      </elementAttributes>
+      <pos x="600" y="780"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>coffee_vending_machine</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>rst_i,clk_i,in_100_i,in_500_i,in_1000_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module coffee_vending_machine(
+	 input rst_i
+	,input clk_i
+	,input in_100_i
+	,input in_500_i
+	,input in_1000_i
+
+	,output reg coffee_o
+	,output reg [3:0] acc_coin1_o
+	,output reg [3:0] acc_coin2_o
+	,output reg [3:0] change_o
+);
+
+	// States
+	parameter COUNTING = 1&apos;b0;
+	parameter DISPENSE = 1&apos;b1;
+
+	reg currentstate, nextstate;
+
+	// state register
+	always @(posedge clk_i) begin
+		if (rst_i) currentstate &lt;= COUNTING; 
+		else currentstate &lt;= nextstate;
+	end
+
+	// next state logic
+	always @(*) begin
+		case (currentstate)
+			COUNTING: if (acc_coin_r &gt;= 6) nextstate = DISPENSE;
+			             else nextstate = currentstate;
+			DISPENSE: if (rst_i | in_100_i | in_500_i | in_1000_i) nextstate = COUNTING;
+			             else nextstate = currentstate;
+			default: nextstate = currentstate; 	// This line is not neccessary
+		endcase
+	end
+
+	reg [3:0] acc_coin_r;
+	// acc_coin_r
+	always @(posedge clk_i) begin
+	   	if (rst_i) acc_coin_r &lt;= 0;
+		else if (currentstate == COUNTING) begin
+			if (in_100_i) acc_coin_r &lt;= acc_coin_r + 1;
+			else if (in_500_i) acc_coin_r &lt;= acc_coin_r + 5;
+			else if (in_1000_i) acc_coin_r	&lt;= acc_coin_r + 10;
+		end
+		else begin
+		  	if (in_100_i) acc_coin_r &lt;= 1;
+			else if (in_500_i) acc_coin_r &lt;= 5;
+			else if (in_1000_i) acc_coin_r	&lt;= 10;
+		end
+	end
+
+	// ouput logic
+	always @(*) begin
+		if (currentstate == DISPENSE) begin
+			coffee_o = 1&apos;b1;
+			change_o = acc_coin_r - 6;
+		end
+		else begin
+			coffee_o = 1&apos;b0;
+			change_o = 0;
+		end
+	end
+
+	always @(*) begin
+		if (acc_coin_r == 10) begin
+			acc_coin1_o = 1;
+			acc_coin2_o = 0;
+		end
+		else begin
+			acc_coin1_o = 0;
+			acc_coin2_o = acc_coin_r;
+		end
+	end
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>coffee_o,acc_coin1_o:4,acc_coin2_o:4,change_o:4</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>10</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1020" y="580"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>edge_detector</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module edge_detector (
+	 input clk_i
+	,input d_i
+
+	,output q_o
+);
+
+	reg ff_r;
+
+	always @(posedge clk_i) begin
+		ff_r &lt;= d_i;
+	end
+
+
+	assign q_o = ~ff_r &amp; d_i;
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="820" y="580"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>edge_detector</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module edge_detector (
+	 input clk_i
+	,input d_i
+
+	,output q_o
+);
+
+	reg ff_r;
+
+	always @(posedge clk_i) begin
+		ff_r &lt;= d_i;
+	end
+
+
+	assign q_o = ~ff_r &amp; d_i;
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="820" y="660"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>edge_detector</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module edge_detector (
+	 input clk_i
+	,input d_i
+
+	,output q_o
+);
+
+	reg ff_r;
+
+	always @(posedge clk_i) begin
+		ff_r &lt;= d_i;
+	end
+
+
+	assign q_o = ~ff_r &amp; d_i;
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="820" y="740"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>synchronizer</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module synchronizer (
+	 input clk_i
+	,input d_i
+
+	,output reg q_o
+);
+
+
+	reg ff1_r;
+
+	always @(posedge clk_i) begin
+		ff1_r &lt;= d_i;
+		q_o &lt;= ff1_r;
+	end
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="580"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>synchronizer</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module synchronizer (
+	 input clk_i
+	,input d_i
+
+	,output reg q_o
+);
+
+
+	reg ff1_r;
+
+	always @(posedge clk_i) begin
+		ff1_r &lt;= d_i;
+		q_o &lt;= ff1_r;
+	end
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="660"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>synchronizer</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk_i,d_i</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module synchronizer (
+	 input clk_i
+	,input d_i
+
+	,output reg q_o
+);
+
+
+	reg ff1_r;
+
+	always @(posedge clk_i) begin
+		ff1_r &lt;= d_i;
+		q_o &lt;= ff1_r;
+	end
+
+endmodule</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>q_o</string>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="740"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="940" y="640"/>
+      <p2 x="1020" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="640"/>
+      <p2 x="1380" y="640"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="480"/>
+      <p2 x="640" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="480"/>
+      <p2 x="960" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="480"/>
+      <p2 x="800" y="480"/>
+    </wire>
+    <wire>
+      <p1 x="1500" y="800"/>
+      <p2 x="1560" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="1380" y="800"/>
+      <p2 x="1480" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="740"/>
+      <p2 x="660" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="740"/>
+      <p2 x="820" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="580"/>
+      <p2 x="1020" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="580"/>
+      <p2 x="1280" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="580"/>
+      <p2 x="660" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="580"/>
+      <p2 x="820" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="920" y="420"/>
+      <p2 x="980" y="420"/>
+    </wire>
+    <wire>
+      <p1 x="880" y="680"/>
+      <p2 x="940" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="720" y="680"/>
+      <p2 x="740" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="620"/>
+      <p2 x="1020" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="620"/>
+      <p2 x="1540" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="620"/>
+      <p2 x="660" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="620"/>
+      <p2 x="820" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="780"/>
+      <p2 x="660" y="780"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="780"/>
+      <p2 x="820" y="780"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="660"/>
+      <p2 x="1020" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="660"/>
+      <p2 x="660" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="660"/>
+      <p2 x="820" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="880" y="600"/>
+      <p2 x="940" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="600"/>
+      <p2 x="1020" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="720" y="600"/>
+      <p2 x="740" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1500" y="600"/>
+      <p2 x="1560" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1220" y="600"/>
+      <p2 x="1480" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="880" y="760"/>
+      <p2 x="960" y="760"/>
+    </wire>
+    <wire>
+      <p1 x="720" y="760"/>
+      <p2 x="740" y="760"/>
+    </wire>
+    <wire>
+      <p1 x="600" y="700"/>
+      <p2 x="660" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="700"/>
+      <p2 x="820" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="660"/>
+      <p2 x="960" y="760"/>
+    </wire>
+    <wire>
+      <p1 x="960" y="480"/>
+      <p2 x="960" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1280" y="520"/>
+      <p2 x="1280" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="480"/>
+      <p2 x="640" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="660"/>
+      <p2 x="640" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="640" y="580"/>
+      <p2 x="640" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="480"/>
+      <p2 x="800" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="580"/>
+      <p2 x="800" y="660"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="660"/>
+      <p2 x="800" y="740"/>
+    </wire>
+    <wire>
+      <p1 x="1540" y="580"/>
+      <p2 x="1540" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="1380" y="640"/>
+      <p2 x="1380" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="600"/>
+      <p2 x="740" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="680"/>
+      <p2 x="740" y="700"/>
+    </wire>
+    <wire>
+      <p1 x="740" y="760"/>
+      <p2 x="740" y="780"/>
+    </wire>
+    <wire>
+      <p1 x="980" y="420"/>
+      <p2 x="980" y="580"/>
+    </wire>
+    <wire>
+      <p1 x="1480" y="580"/>
+      <p2 x="1480" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1480" y="780"/>
+      <p2 x="1480" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="1560" y="580"/>
+      <p2 x="1560" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1560" y="800"/>
+      <p2 x="1560" y="820"/>
+    </wire>
+    <wire>
+      <p1 x="1560" y="600"/>
+      <p2 x="1560" y="800"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="600"/>
+      <p2 x="940" y="620"/>
+    </wire>
+    <wire>
+      <p1 x="940" y="640"/>
+      <p2 x="940" y="680"/>
+    </wire>
+    <wire>
+      <p1 x="1500" y="580"/>
+      <p2 x="1500" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1500" y="780"/>
+      <p2 x="1500" y="800"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>

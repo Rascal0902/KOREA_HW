@@ -1,0 +1,559 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>runRealTime</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>Clock In</string>
+        </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>1000</int>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="100"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Reset</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="20"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Up_button_1</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="180"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Seven-Seg-Hex</elementName>
+      <elementAttributes>
+        <entry>
+          <string>segSize</string>
+          <int>1</int>
+        </entry>
+      </elementAttributes>
+      <pos x="1020" y="140"/>
+    </visualElement>
+    <visualElement>
+      <elementName>LED</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>UP_led</string>
+        </entry>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+      </elementAttributes>
+      <pos x="840" y="-60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>IVERILOG</appType>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>elevator_machine</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>rst_i,clk_i,up_btn_i1,up_btn_i2,up_btn_i3,down_btn_i2,down_btn_i3,down_btn_i4</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>15</int>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>cur_floor_o:4,direction1_o,direction2_o</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>`timescale 1ns/1ps
+
+module elevator_machine(
+	input rst_i,
+	input clk_i,
+	input up_btn_i1,
+	input up_btn_i2,
+	input up_btn_i3,
+	input down_btn_i2,
+	input down_btn_i3,
+	input down_btn_i4,
+
+	output reg[3:0] cur_floor_o,
+	output reg direction1_o,
+	output reg direction2_o
+);
+	//States
+	parameter FLOOR1 = 4&apos;b0001;
+	parameter FLOOR2 = 4&apos;b0010;
+	parameter FLOOR3 = 4&apos;b0011;
+	parameter FLOOR4 = 4&apos;b0100;
+
+	parameter MIDFLOOR2UP1to3 = 4&apos;b0101;
+	parameter MIDFLOOR2DOWN3to1 = 4&apos;b0110;
+
+	parameter MIDFLOOR3UP2to4 = 4&apos;b0111;
+	parameter MIDFLOOR3DOWN4to2 = 4&apos;b1000;
+
+	parameter MIDFLOOR2UP1to4 = 4&apos;b1001;
+	parameter MIDFLOOR2DOWN4to1 = 4&apos;b1010;
+
+	parameter MIDFLOOR3UP1to4 = 4&apos;b1011;
+	parameter MIDFLOOR3DOWN4to1 = 4&apos;b1100;
+
+	parameter TIMER_MAX = 2000;  // 2 seconds at 1KHz clock
+
+	reg[3:0] currentstate, nextstate;
+	reg [31:0] timer;  // 32-bit counter to track time
+	reg timer_done;    // Flag to indicate when 2 seconds have passed
+	reg oneloop, oneloop2;
+
+        //state register
+	always @(posedge clk_i) begin
+		if(timer_done) begin
+			currentstate &lt;= nextstate;
+			direction1_o &lt;= 0;
+			direction2_o &lt;= 0;
+		end
+		else currentstate &lt;= currentstate;
+	end
+
+	//Timer logic: 2second
+	always @(posedge clk_i or posedge rst_i) begin
+		begin
+			if(timer_done == 0 &amp;&amp; timer &lt; TIMER_MAX) begin
+				timer &lt;= timer +1;
+				timer_done &lt;= 0;
+			end
+			else begin
+				timer_done &lt;= 1;
+			end
+		end
+	end
+
+	//next state logic
+	always @(*) begin
+		if(rst_i) begin
+			currentstate &lt;= FLOOR1;
+			nextstate &lt;= FLOOR1;
+			timer &lt;= 0;
+			timer_done &lt;= 1;
+			direction1_o &lt;= 0;
+			direction2_o &lt;= 0;
+		end
+
+		if(up_btn_i1 || up_btn_i2 || up_btn_i3 || down_btn_i2 || down_btn_i3 || down_btn_i4) begin
+			timer &lt;= 0;
+			timer_done &lt;= 0;
+		end
+
+		case (currentstate)
+			FLOOR1: begin
+				if(up_btn_i2 || down_btn_i2) nextstate = FLOOR2;
+				if(down_btn_i3 || up_btn_i3) begin
+					nextstate = MIDFLOOR2UP1to3;
+					oneloop = 1;
+				end
+				if(down_btn_i4) begin
+					nextstate = MIDFLOOR2UP1to4;
+					oneloop = 1;
+					oneloop2 = 1;
+				end
+			end
+
+			FLOOR2: begin
+				if(up_btn_i1) nextstate = FLOOR1;
+				if(down_btn_i3 || up_btn_i3) nextstate = FLOOR3;
+				if(down_btn_i4) begin
+					nextstate = MIDFLOOR3UP2to4;
+					oneloop = 1;
+				end
+			end
+
+			FLOOR3: begin
+				if(down_btn_i4) nextstate = FLOOR4;
+				if(up_btn_i2 || down_btn_i2) nextstate = FLOOR2;
+				if(up_btn_i1) begin
+					nextstate = MIDFLOOR2DOWN3to1;
+					oneloop = 1;
+				end
+			end
+		
+			FLOOR4: begin
+				if(down_btn_i3 || up_btn_i3) nextstate = FLOOR3;
+				if(down_btn_i2 || up_btn_i2) begin
+					nextstate = MIDFLOOR3DOWN4to2;
+					oneloop = 1;
+				end
+				if(up_btn_i1) begin
+					nextstate = MIDFLOOR3DOWN4to1;
+					oneloop = 1;
+					oneloop2 = 1;
+				end
+			end
+
+			MIDFLOOR2UP1to3: begin 
+				if(oneloop == 1) begin
+					nextstate = FLOOR3;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR2DOWN3to1: begin
+				if(oneloop == 1) begin
+					nextstate = FLOOR1;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR3UP2to4: begin
+				if(oneloop == 1) begin
+					nextstate = FLOOR4;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR3DOWN4to2: begin
+				if(oneloop == 1) begin
+					nextstate = FLOOR2;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR2UP1to4: begin
+				if(oneloop == 1) begin
+					nextstate = MIDFLOOR3UP1to4;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR3UP1to4: begin
+				if(oneloop2 == 1) begin
+					nextstate = FLOOR4;
+					timer_done = 0;
+					timer = 0;
+					oneloop2 = 0;
+				end
+			end
+
+			MIDFLOOR3DOWN4to1: begin
+				if(oneloop == 1) begin
+					nextstate = MIDFLOOR2DOWN4to1;
+					timer_done = 0;
+					timer = 0;
+					oneloop = 0;
+				end
+			end
+
+			MIDFLOOR2DOWN4to1: begin
+				if(oneloop2 == 1) begin
+					nextstate = FLOOR1;
+					timer_done = 0;
+					timer = 0;
+					oneloop2 = 0;
+				end
+			end
+		endcase
+	end
+
+	//output logic
+	always@(*) begin
+		if (currentstate == FLOOR1) begin
+			cur_floor_o = FLOOR1;
+			direction1_o = (nextstate == FLOOR2 || nextstate == MIDFLOOR2UP1to3 || nextstate == MIDFLOOR2UP1to4);
+			direction2_o = 0;
+		end
+		else if (currentstate == FLOOR2) begin
+			cur_floor_o = FLOOR2;
+			direction1_o = (nextstate == FLOOR3 || nextstate == MIDFLOOR3UP2to4);
+			direction2_o = (nextstate == FLOOR1);
+		end
+		else if (currentstate == FLOOR3) begin
+			cur_floor_o = FLOOR3;
+			direction1_o = (nextstate == FLOOR4);
+			direction2_o = (nextstate == FLOOR2 || nextstate == MIDFLOOR2DOWN3to1);
+		end
+		else if (currentstate == FLOOR4) begin
+			cur_floor_o = FLOOR4;
+			direction1_o = 0;
+			direction2_o = (nextstate == FLOOR3 || nextstate == MIDFLOOR3DOWN4to2 || nextstate == MIDFLOOR3DOWN4to1);
+		end
+		else if (currentstate == MIDFLOOR2UP1to3 || currentstate == MIDFLOOR2UP1to4) begin
+			cur_floor_o = FLOOR2;
+			direction1_o = 1;
+			direction2_o = 0;
+		end
+		else if (currentstate == MIDFLOOR2DOWN3to1 || currentstate == MIDFLOOR2DOWN4to1) begin
+			cur_floor_o = FLOOR2;
+			direction1_o = 0;
+			direction2_o = 1;
+		end
+		else if (currentstate == MIDFLOOR3UP2to4 || currentstate == MIDFLOOR3UP1to4) begin
+			cur_floor_o = FLOOR3;
+			direction1_o = 1;
+			direction2_o = 0;
+		end
+		else if (currentstate == MIDFLOOR3DOWN4to2 || currentstate == MIDFLOOR3DOWN4to1) begin
+			cur_floor_o = FLOOR3;
+			direction1_o = 0;
+			direction2_o = 1;
+		end
+	end
+
+endmodule</string>
+        </entry>
+      </elementAttributes>
+      <pos x="500" y="160"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Up_button_2</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="280"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Down_button_2</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="340"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Down_button_3</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="500"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Up_button_3</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="440"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Button</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>Down_button_4</string>
+        </entry>
+      </elementAttributes>
+      <pos x="180" y="600"/>
+    </visualElement>
+    <visualElement>
+      <elementName>LED</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>DOWN_led</string>
+        </entry>
+      </elementAttributes>
+      <pos x="920" y="-60"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>rotation</string>
+          <rotation rotation="1"/>
+        </entry>
+      </elementAttributes>
+      <pos x="1080" y="360"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="840" y="320"/>
+      <p2 x="1060" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="160"/>
+      <p2 x="840" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="160"/>
+      <p2 x="500" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="100"/>
+      <p2 x="440" y="100"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="260"/>
+      <p2 x="500" y="260"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="200"/>
+      <p2 x="920" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="200"/>
+      <p2 x="500" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="820" y="140"/>
+      <p2 x="840" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="400" y="300"/>
+      <p2 x="500" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="240"/>
+      <p2 x="500" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="800" y="180"/>
+      <p2 x="820" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="180"/>
+      <p2 x="500" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="180"/>
+      <p2 x="420" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="20"/>
+      <p2 x="460" y="20"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="340"/>
+      <p2 x="480" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="500"/>
+      <p2 x="460" y="500"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="280"/>
+      <p2 x="420" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="280"/>
+      <p2 x="500" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="440"/>
+      <p2 x="440" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="180" y="600"/>
+      <p2 x="400" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="220"/>
+      <p2 x="500" y="220"/>
+    </wire>
+    <wire>
+      <p1 x="480" y="260"/>
+      <p2 x="480" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="400" y="300"/>
+      <p2 x="400" y="600"/>
+    </wire>
+    <wire>
+      <p1 x="1060" y="280"/>
+      <p2 x="1060" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="820" y="140"/>
+      <p2 x="820" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="180"/>
+      <p2 x="420" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="220"/>
+      <p2 x="420" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="1080" y="280"/>
+      <p2 x="1080" y="360"/>
+    </wire>
+    <wire>
+      <p1 x="840" y="160"/>
+      <p2 x="840" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="840" y="-60"/>
+      <p2 x="840" y="140"/>
+    </wire>
+    <wire>
+      <p1 x="920" y="-60"/>
+      <p2 x="920" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="100"/>
+      <p2 x="440" y="180"/>
+    </wire>
+    <wire>
+      <p1 x="440" y="240"/>
+      <p2 x="440" y="440"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="20"/>
+      <p2 x="460" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="280"/>
+      <p2 x="460" y="500"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>
