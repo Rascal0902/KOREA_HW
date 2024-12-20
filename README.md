@@ -1,3 +1,3 @@
-# data_structure(자료구조)
+# theory of computation(계산이론)
 
-Homework using Codeblocks
+Homework using pycharm
