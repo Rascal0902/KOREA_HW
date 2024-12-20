@@ -1,3 +1,3 @@
-# Digital logic(논리설계)
+# data_structure(자료구조)
 
-Homework using Digital 
+Homework using Codeblocks
